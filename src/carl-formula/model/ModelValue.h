@@ -33,17 +33,64 @@ namespace carl
 	 * This class represents infinity or minus infinity, depending on its flag positive.
 	 * The default is minus infinity.
 	 */
-	struct InfinityValue {
-		bool positive = false;
-	};
+	struct InfinityValue { bool positive = false; };
 
 	inline bool operator==(InfinityValue lhs, InfinityValue rhs) {
 		return lhs.positive == rhs.positive;
 	}
 	
 	inline std::ostream& operator<<(std::ostream& os, const InfinityValue& iv) {
-		return os << (iv.positive ? "+" : "-") << "infinity";
+		return os << (iv.positive ? "+" : "-") << "oo";
 	}
+
+    template<typename Poly>
+    struct SymbolicInterval {
+        std::optional<MultivariateRoot<Poly>> lower = std::nullopt;
+        bool lower_strict = true;
+        std::optional<MultivariateRoot<Poly>> upper = std::nullopt;
+        bool upper_strict = true;
+    };
+	
+    template<typename Poly>
+	inline std::ostream& operator<<(std::ostream& os, const SymbolicInterval<Poly>& i) {
+        os << (i.lower_strict ? "(" : "[");
+        if (i.lower) os << i.lower;
+        else os << "-oo";
+        os << ", ";
+        if (i.upper) os << i.upper;
+        else os << "oo";
+        os << (i.upper_strict ? ")" : "]");
+		return os;
+	}
+
+    template<typename Poly>
+    inline bool operator==(const SymbolicInterval<Poly>& lhs, const SymbolicInterval<Poly>& rhs) {
+		return (
+               lhs.lower_strict == rhs.lower_strict
+            && lhs.lower == rhs.lower
+            && lhs.upper_strict == rhs.upper_strict
+            && lhs.upper == rhs.upper
+        );
+	}
+
+
+    template<typename RAN>
+    struct Infinitesimal {
+        RAN value;
+        bool is_infimum; // otherwise it is a supremum
+    };
+
+    template<typename RAN>
+	inline std::ostream& operator<<(std::ostream& os, const Infinitesimal<RAN>& d) {
+        os << "(" << (d.is_infimum ? "+ " : "- ") << d.value << " epsilon)";
+		return os;
+	}
+
+    template<typename RAN>
+    inline bool operator==(const Infinitesimal<RAN>& lhs, const Infinitesimal<RAN>& rhs) {
+		return lhs.value == rhs.value && lhs.is_infimum == rhs.is_infimum;
+	}
+
 	
 	/**
 	 * Represent a sum type/variant over the different kinds of values that
@@ -60,10 +107,24 @@ namespace carl
 		friend bool operator==(const ModelValue<R,P>& lhs, const ModelValue<R,P>& rhs);
 		template<typename R, typename P>
 		friend bool operator<(const ModelValue<R,P>& lhs, const ModelValue<R,P>& rhs);
+
+        using RAN = Poly::RootType;
 		/**
 		 * Base type we are deriving from.
 		 */
-		using Super = std::variant<bool, Rational, SqrtEx<Poly>, typename Poly::RootType, BVValue, SortValue, UFModel, InfinityValue, ModelSubstitutionPtr<Rational,Poly>>;
+		using Super = std::variant<
+                                bool,
+                                Rational,
+                                SqrtEx<Poly>,
+                                RAN,
+                                BVValue,
+                                SortValue,
+                                UFModel,
+                                InfinityValue,
+                                ModelSubstitutionPtr<Rational,Poly>,
+                                SymbolicInterval<Poly>,
+                                Infinitesimal<RAN>
+                                >;
 		
 		Super mData;
 
@@ -137,147 +198,36 @@ namespace carl
 			return std::visit(f, mData);
 		}
 
-		/**
-		 * @return true, if the stored value is a bool.
-		 */
-		bool isBool() const {
-			return std::holds_alternative<bool>(mData);
-		}
-		
-		/**
-		 * @return true, if the stored value is a rational.
-		 */
-		bool isRational() const {
-			return std::holds_alternative<Rational>(mData);
-		}
-		
-		/**
-		 * @return true, if the stored value is a square root expression.
-		 */
-		bool isSqrtEx() const {
-			return std::holds_alternative<SqrtEx<Poly>>(mData);
-		}
-		
-		/**
-		 * @return true, if the stored value is a real algebraic number.
-		 */
-		bool isRAN() const {
-			return std::holds_alternative<typename Poly::RootType>(mData);
-		}
-		
-		/**
-		 * @return true, if the stored value is a bitvector literal.
-		 */
-		bool isBVValue() const {
-			return std::holds_alternative<BVValue>(mData);
-		}
-
-		/**
-		 * @return true, if the stored value is a sort value.
-		 */
-		bool isSortValue() const {
-			return std::holds_alternative<SortValue>(mData);
-		}
-		
-		/**
-		 * @return true, if the stored value is a uninterpreted function model.
-		 */
-		bool isUFModel() const {
-			return std::holds_alternative<UFModel>(mData);
-		}
-		
-		/**
-		 * @return true, if the stored value is +infinity.
-		 */
+		bool isBool()      const { return std::holds_alternative<bool>(mData); }
+		bool isRational()  const { return std::holds_alternative<Rational>(mData); }
+		bool isSqrtEx()    const { return std::holds_alternative<SqrtEx<Poly>>(mData); }
+		bool isRAN()       const { return std::holds_alternative<RAN>(mData); }
+		bool isBVValue()   const { return std::holds_alternative<BVValue>(mData); }
+		bool isSortValue() const { return std::holds_alternative<SortValue>(mData); }
+		bool isUFModel()   const { return std::holds_alternative<UFModel>(mData); }
+		bool isSubstitution() const { return std::holds_alternative<ModelSubstitutionPtr<Rational,Poly>>(mData); }
 		bool isPlusInfinity() const {
 			return std::holds_alternative<InfinityValue>(mData) && std::get<InfinityValue>(mData).positive;
 		}
-		/**
-		 * @return true, if the stored value is -infinity.
-		 */
 		bool isMinusInfinity() const {
 			return std::holds_alternative<InfinityValue>(mData) && !std::get<InfinityValue>(mData).positive;
 		}
-		
-		bool isSubstitution() const {
-			return std::holds_alternative<ModelSubstitutionPtr<Rational,Poly>>(mData);
-		}
+        bool isSymbolicInterval() const { return std::holds_alternative<SymbolicInterval<Poly>>(mData); }
+        bool isInfinitesimal() const { return std::holds_alternative<Infinitesimal<RAN>>(mData); }
 
-		/**
-		 * @return The stored value as a bool.
-		 */
-		bool asBool() const {
-			assert(isBool());
-			return std::get<bool>(mData);
-		}
-		
-		/**
-		 * @return The stored value as a rational.
-		 */
-		const Rational& asRational() const {
-			assert(isRational());
-			return std::get<Rational>(mData);
-		}
-		
-		/**
-		 * @return The stored value as a square root expression.
-		 */
-		const SqrtEx<Poly>& asSqrtEx() const {
-			assert(isSqrtEx());
-			return std::get<SqrtEx<Poly>>(mData);
-		}
-		
-		/**
-		 * @return The stored value as a real algebraic number.
-		 */
-		const typename Poly::RootType& asRAN() const {
-			assert(isRAN());
-			return std::get<typename Poly::RootType>(mData);
-		}
-		
-		/**
-		 * @return The stored value as a real algebraic number.
-		 */
-		const carl::BVValue& asBVValue() const {
-			assert(isBVValue());
-			return std::get<carl::BVValue>(mData);
-		}
-
-		/**
-		 * @return The stored value as a sort value.
-		 */
-		const SortValue& asSortValue() const {
-			assert(isSortValue());
-			return std::get<SortValue>(mData);
-		}
-		
-		/**
-		 * @return The stored value as a uninterpreted function model.
-		 */
-		const UFModel& asUFModel() const {
-			assert(isUFModel());
-			return std::get<UFModel>(mData);
-		}
-		UFModel& asUFModel() {
-			assert(isUFModel());
-			return std::get<UFModel>(mData);
-		}
-		/**
-		 * @return The stored value as a infinity value.
-		 */
-		const InfinityValue& asInfinity() const {
-			assert(isPlusInfinity() || isMinusInfinity());
-			return std::get<InfinityValue>(mData);
-		}
-		
-		const ModelSubstitutionPtr<Rational,Poly>& asSubstitution() const {
-			assert(isSubstitution());
-			return std::get<ModelSubstitutionPtr<Rational,Poly>>(mData);
-		}
-		ModelSubstitutionPtr<Rational,Poly>& asSubstitution() {
-			assert(isSubstitution());
-			return std::get<ModelSubstitutionPtr<Rational,Poly>>(mData);
-		}	
+		bool asBool() const { assert(isBool()); return std::get<bool>(mData); }
+		const Rational&   asRational() const { assert(isRational()); return std::get<Rational>(mData); }
+		const SqrtEx<Poly>& asSqrtEx() const { assert(isSqrtEx()); return std::get<SqrtEx<Poly>>(mData); }
+		const RAN&             asRAN() const { assert(isRAN()); return std::get<RAN>(mData); }
+		const BVValue&     asBVValue() const { assert(isBVValue()); return std::get<BVValue>(mData); }
+		const SortValue& asSortValue() const { assert(isSortValue()); return std::get<SortValue>(mData); }
+		const UFModel&     asUFModel() const { assert(isUFModel()); return std::get<UFModel>(mData); }
+		      UFModel&     asUFModel()       { assert(isUFModel()); return std::get<UFModel>(mData); }
+		const InfinityValue& asInfinity() const { assert(isPlusInfinity() || isMinusInfinity()); return std::get<InfinityValue>(mData); }
+		const ModelSubstitutionPtr<Rational,Poly>& asSubstitution() const { assert(isSubstitution()); return std::get<ModelSubstitutionPtr<Rational,Poly>>(mData); }
+		      ModelSubstitutionPtr<Rational,Poly>& asSubstitution()       { assert(isSubstitution()); return std::get<ModelSubstitutionPtr<Rational,Poly>>(mData); }
+        const SymbolicInterval<Poly>& asSymbolicInterval() const { assert(isSymbolicInterval()); return std::get<SymbolicInterval<Poly>>(mData); }
+        const Infinitesimal<RAN>& asInfinitesimal() const { assert(isInfinitesimal()); return std::get<Infinitesimal<RAN>>(mData); }
 	};
 
 	/**
@@ -303,6 +253,17 @@ namespace carl
 	
 	template<typename R, typename P>
 	inline std::ostream& operator<<(std::ostream& os, const ModelValue<R,P>& mv) {
+        if (mv.isBool())      { return os << mv.asBool(); }
+		if (mv.isRational())  { return os << mv.asRational(); }
+		if (mv.isSqrtEx())    { return os << mv.asSqrtEx(); }
+		if (mv.isRAN())       { return os << mv.asRAN(); }
+		if (mv.isBVValue())   { return os << mv.asBVValue(); }
+		if (mv.isSortValue()) { return os << mv.asSortValue(); }
+		if (mv.isUFModel())   { return os << mv.asUFModel(); }
+		if (mv.isSubstitution()) { return os << mv.asSubstitution(); }
+		if (mv.isPlusInfinity() || mv.isMinusInfinity()) { return os << mv.asInfinity(); }
+        if (mv.isSymbolicInterval()) { return os << mv.asSymbolicInterval(); }
+        if (mv.isInfinitesimal()) { return os << mv.asInfinitesimal(); }
 		return os << mv.mData;
 	}
 }
