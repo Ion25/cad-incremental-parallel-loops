@@ -376,6 +376,7 @@ public:
 
 	std::vector<std::size_t> monomial_total_degrees() const;
 	std::vector<std::size_t> monomial_degrees(Variable::Arg var) const;
+	std::size_t degree_all_variables() const;
 
 
 	/**

@@ -467,6 +467,30 @@ std::vector<std::size_t>  LPPolynomial::monomial_degrees(Variable::Arg var) cons
     return travers.degree;
 }
 
+std::size_t  LPPolynomial::degree_all_variables() const {
+    struct degree_travers {
+        std::size_t degree = 0;
+    };
+
+    auto getDegree = [](const lp_polynomial_context_t* /*ctx*/,
+                        lp_monomial_t* m,
+                        void* d) {
+        degree_travers& v = *static_cast<degree_travers*>(d);
+
+        // iterate over the number of variables and add up their degrees
+        for (size_t i = 0; i < m->n; i++) {
+            if (v.degree < m->p[i].d) {
+                v.degree = m->p[i].d;
+            }
+        }
+    };
+
+    degree_travers travers;
+    lp_polynomial_traverse(get_internal(), getDegree, &travers);
+
+    return travers.degree;
+}
+
 mpz_class LPPolynomial::unit_part() const {
     //As we can only have integer coefficients, they do not form a field
     //Thus the unit part is the sign of the leading coefficient, if it is not zero
