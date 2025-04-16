@@ -349,7 +349,9 @@ template<typename Coeff>
 bool UnivariatePolynomial<Coeff>::divides(const UnivariatePolynomial& divisor) const
 {
 	///@todo Is this correct?
-	return carl::is_zero(divisor.divideBy(*this).remainder);
+	//return carl::is_zero(divisor.divideBy(*this).remainder);
+	assert(false); // not implemented
+	return false;
 }
 
 template<typename Coeff>
