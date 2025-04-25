@@ -108,7 +108,7 @@ namespace carl
 		template<typename R, typename P>
 		friend bool operator<(const ModelValue<R,P>& lhs, const ModelValue<R,P>& rhs);
 
-        using RAN = Poly::RootType;
+        using RAN = typename Poly::RootType;
 		/**
 		 * Base type we are deriving from.
 		 */
